@@ -1,0 +1,36 @@
+@import url('./reset.css');
+@import url('./typography.css');
+@import url('./site-header.css');
+@import url('./main-content.css');
+@import url('./responsive.css');
+
+html {
+    scroll-behavior: smooth;
+}
+
+.site-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    height: 100vh;
+    justify-content: center;
+}
+
+header,
+.main-wrapper
+.modal {
+    flex: 0 1 100%;
+}
+
+.site-wrapper::-webkit-scrollbar {
+    display: none;
+}
+
+/* YouTube плеърът за фонова музика — скрит извън екрана, но активен. */
+#yt-player-wrap {
+    position: fixed;
+    left: -9999px;
+    top: 0;
+    width: 320px;
+    height: 180px;
+    pointer-events: none;
+}
