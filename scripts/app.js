@@ -55,7 +55,7 @@
         { src: "./public/partners/propilateslogo.png", name: "Pro Pilates" },
         { src: "./public/partners/janet_logo.webp", name: "Janet's Reformer Boutique" },
         { src: "./public/partners/panther_logo.png", name: "Panther Pilates Reformers" },
-        { src: "./public/partners/gmfit.webp", name: "GMFIT" },
+        { src: "./public/partners/gmfit.webp", name: "GM FIT" },
         { src: "./public/partners/NA_logo.svg", name: "NA Luxury Curves" },
         { src: "./public/partners/sculpt&beauty.svg", name: "Sculpt&Beauty" },
         { src: "./public/partners/sq_pilates_reformer.svg", name: "SQ Pilates Reformer" },
