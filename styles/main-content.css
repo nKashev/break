@@ -58,7 +58,7 @@
     flex: 0 0 auto;
 }
 
-.timer-toggle.timer-off { background: #b6b9be; }
+.timer-toggle.timer-off { background: #ed1c24; }
 .timer-toggle.timer-on  { background: #2ecc4f; }
 
 .timer-toggle:focus-visible {
