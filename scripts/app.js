@@ -17,7 +17,7 @@
      * Може да сложиш цял линк ИЛИ само ID-то. Празна стойност ('') = само mp3.
      * Може и през URL, без да пипаш кода: index.html?yt=ВИДЕО_ID
      * ====================================================================== */
-    const MUSIC_STREAM_ID = 'https://www.youtube.com/watch?v=ac9Uxk6P37w';
+    const MUSIC_STREAM_ID = 'https://www.youtube.com/watch?v=36YnV9STBqc';
 
     /* ----- elements.js ----- */
     const elements = {
@@ -59,7 +59,9 @@
         { src: "./public/partners/NA_logo.svg", name: "NA Luxury Curves" },
         { src: "./public/partners/sculpt&beauty.svg", name: "Sculpt&Beauty" },
         { src: "./public/partners/sq_pilates_reformer.svg", name: "SQ Pilates Reformer" },
-        { src: "./public/partners/tn_logo.png", name: "TN Pilates" }    
+        { src: "./public/partners/tn_logo.png", name: "TN Pilates" },
+        { src: "./public/partners/Margo_no_bg_circle.png", name: "So Personal by Margo" },
+        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }    
     ];
 
     /* ----- slider.js ----- */
