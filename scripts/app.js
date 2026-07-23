@@ -10,6 +10,12 @@
 
     /* ======================================================================
      * МУЗИКА
+     * 1) Опитва да пусне видеото от YouTube (работи сигурно на GitHub Pages;
+     *    локално през file:// понякога не тръгва — браузърнo ограничение).
+     * 2) Ако YouTube не успее, при клик върху логото свири public/melody.mp3.
+     *
+     * Може да сложиш цял линк ИЛИ само ID-то. Празна стойност ('') = само mp3.
+     * Може и през URL, без да пипаш кода: index.html?yt=ВИДЕО_ID
      * ====================================================================== */
     const MUSIC_STREAM_ID = 'https://www.youtube.com/watch?v=36YnV9STBqc';
 
@@ -55,7 +61,7 @@
         { src: "./public/partners/sq_pilates_reformer.svg", name: "SQ Pilates Reformer" },
         { src: "./public/partners/tn_logo.png", name: "TN Pilates" },
         { src: "./public/partners/Margo_no_bg_circle.png", name: "So Personal by Margo" },
-        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }
+        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }    
     ];
 
     /* ----- slider.js ----- */
@@ -108,123 +114,40 @@
         seconds: eventHandler
     };
 
-    /* ======================================================================
-     * ТАЙМЕР — Web Worker (background) + RAF fallback
-     * Worker-ът се създава като Blob, за да работи от file:// и GitHub Pages
-     * без проблеми с пътища.
-     * ====================================================================== */
-    const WORKER_CODE = `
-        'use strict';
-        var intervalId = null;
-        var remaining  = 0;
-        self.onmessage = function(e) {
-            var cmd = e.data.cmd;
-            if (cmd === 'start') {
-                if (intervalId !== null) { clearInterval(intervalId); }
-                remaining = e.data.totalSeconds;
-                intervalId = setInterval(function() {
-                    if (remaining <= 0) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                        self.postMessage({ type: 'done' });
-                        return;
-                    }
-                    remaining--;
-                    self.postMessage({ type: 'tick', totalSeconds: remaining });
-                }, 1000);
-            } else if (cmd === 'stop') {
-                if (intervalId !== null) {
-                    clearInterval(intervalId);
-                    intervalId = null;
-                }
-            }
-        };
-    `;
-
-    let timerWorker = null;
-
-    function createWorker() {
-        try {
-            var blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-            var url  = URL.createObjectURL(blob);
-            var w    = new Worker(url);
-            URL.revokeObjectURL(url);
-            return w;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    /* RAF fallback */
-    let animationId    = null;
+    /* ----- animations.js ----- */
+    let animationId;
+    let countdownTime = 0;
     let lastTimeCalled = 0;
-    let countdownTime  = 0;
 
-    function rafTick(elapsedTime) {
+    function startUpdateSeconds(elapsedTime) {
         if ((elapsedTime - lastTimeCalled) >= 1000 || lastTimeCalled === 0) {
             lastTimeCalled = elapsedTime;
+            countdownTime = (Number(elements.time.minutes().textContent) * 60) + Number(elements.time.seconds().textContent);
 
-            var mEl     = elements.time.minutes();
-            var sEl     = elements.time.seconds();
-            var minutes = Number(mEl.textContent);
-            var secs    = Number(sEl.textContent);
+            const minutes = elements.time.minutes().textContent;
+            const seconds = elements.time.seconds().textContent;
 
-            if (secs > 0) {
-                sEl.textContent = formatTimeContent(secs - 1);
+            if (seconds > 0) {
+                const changedSeconds = seconds - 1;
+                elements.time.seconds().textContent = formatTimeContent(changedSeconds);
             } else if (minutes > 0) {
-                mEl.textContent = formatTimeContent(minutes - 1);
-                sEl.textContent = '59';
+                const changedMinutes = minutes - 1;
+                elements.time.minutes().textContent = formatTimeContent(changedMinutes);
+                elements.time.seconds().textContent = 59;
+            } else if (parseQueryString(location.search)?.prep) {
+                elements.time.minutes().textContent = formatTimeContent(getMinutesToSet());
             } else {
-                onTimerDone();
-                return; // не продължава RAF
+                // НОВО: таймерът стигна 00:00 — спира музиката
+                stopMusic();
             }
         }
-        animationId = requestAnimationFrame(rafTick);
+        animationId = requestAnimationFrame(startUpdateSeconds);
     }
 
-    function onTimerDone() {
-        isStarted = false;
-        stopTimer();
-        toggleTimerState(elements.info.timerState(), false);
-        elements.time.minutes().textContent = '00';
-        elements.time.seconds().textContent = '00';
-        stopMusic();
-    }
-
-    function startTimer(totalSeconds) {
-        var w = createWorker();
-        if (w) {
-            timerWorker = w;
-            timerWorker.onmessage = function (e) {
-                if (e.data.type === 'tick') {
-                    var mins = Math.floor(e.data.totalSeconds / 60);
-                    var secs = e.data.totalSeconds % 60;
-                    elements.time.minutes().textContent = formatTimeContent(mins);
-                    elements.time.seconds().textContent = formatTimeContent(secs);
-                } else if (e.data.type === 'done') {
-                    onTimerDone();
-                }
-            };
-            timerWorker.postMessage({ cmd: 'start', totalSeconds: totalSeconds });
-        } else {
-            // RAF fallback
-            lastTimeCalled = 0;
-            animationId = requestAnimationFrame(rafTick);
-        }
-    }
-
-    function stopTimer() {
-        if (timerWorker) {
-            timerWorker.postMessage({ cmd: 'stop' });
-            timerWorker.terminate();
-            timerWorker = null;
-        }
-        if (animationId) {
-            cancelAnimationFrame(animationId);
-            animationId = null;
-        }
-        lastTimeCalled = 0;
-    }
+    const animationFrame = {
+        startUpdateSeconds: () => requestAnimationFrame(startUpdateSeconds),
+        stopUpdateSeconds: () => cancelAnimationFrame(animationId)
+    };
 
     /* ----- controls.js ----- */
     let isStarted = false;
@@ -233,13 +156,9 @@
     function controlCenter() {
         isStarted = !isStarted;
         if (isStarted) {
-            const mins  = Number(elements.time.minutes().textContent);
-            const secs  = Number(elements.time.seconds().textContent);
-            const total = mins * 60 + secs;
-            if (total <= 0) { isStarted = false; return; }
-            startTimer(total);
+            animationFrame.startUpdateSeconds();
         } else {
-            stopTimer();
+            animationFrame.stopUpdateSeconds();
         }
         toggleTimerState(timerState(), isStarted);
     }
@@ -268,22 +187,11 @@
     function setTheTimer(e) {
         e.preventDefault();
         const [minutesVal, secondsVal] = [...document.querySelectorAll('form input')].map((el) => formatTimeContent(el.value));
-        const suggestedPick = e.suggestedPick !== undefined ? e.suggestedPick : false;
+        const suggestedPick = e.suggestedPick ? formatTimeContent(e.suggestedPick) : false;
+        const timeFromForm = formatTimeContent(minutesVal);
 
-        if (suggestedPick !== false) {
-            const num = Number(suggestedPick);
-            if (num >= 60) {
-                // 60 → 59:59 (максимумът на таймера)
-                minutes().textContent = '59';
-                seconds().textContent = '59';
-            } else {
-                minutes().textContent = formatTimeContent(num);
-                seconds().textContent = '00';
-            }
-        } else {
-            minutes().textContent = formatTimeContent(minutesVal);
-            seconds().textContent = formatTimeContent(secondsVal);
-        }
+        minutes().textContent = suggestedPick || timeFromForm;
+        seconds().textContent = formatTimeContent(secondsVal);
 
         toggleModal();
 
@@ -297,13 +205,22 @@
 
     function pickSuggestedTime(e) {
         const { textContent } = e.target;
+        // НОВО: приема и "60" (3 символа) в допълнение към оригиналните 2-символни стойности
         const trimmed = textContent.trim();
-        // Оригиналната проверка беше length !== 2, но "60" е 2 символа, така че
-        // проверяваме само дали е число
-        if (!trimmed || isNaN(Number(trimmed))) { return; }
+        if (trimmed.length < 2 || isNaN(Number(trimmed))) { return 0; }
+
+        // 60 → зарежда 59:59
+        if (Number(trimmed) >= 60) {
+            minutes().textContent = '59';
+            seconds().textContent = '59';
+            toggleModal();
+            if (!isStartedYet()) { elements.info.timerState().click(); }
+            return;
+        }
+
         setTheTimer({
             suggestedPick: trimmed,
-            preventDefault: () => {}
+            preventDefault: () => { }
         });
     }
 
@@ -354,10 +271,10 @@
         return Number(value).toString().padStart(2, 0);
     }
 
-    /* ----- music.js ----- */
     let ytPlayer = null;
-    let ytReady  = false;
+    let ytReady = false;
 
+    // Приема цял YouTube линк или само ID и връща чистото 11-символно ID.
     function extractYouTubeId(input) {
         if (!input) { return ''; }
         input = String(input).trim();
@@ -367,43 +284,51 @@
     }
 
     function setupMusic() {
-        const raw      = (parseQueryString(location.search)?.yt) || MUSIC_STREAM_ID;
+        const raw = (parseQueryString(location.search)?.yt) || MUSIC_STREAM_ID;
         const streamId = extractYouTubeId(raw);
-        if (!streamId) { return; }
+        if (!streamId) { return; } // няма валиден YouTube ID → ползва се само mp3
 
         window.onYouTubeIframeAPIReady = function () {
             try {
                 ytPlayer = new YT.Player('yt-player', {
                     videoId: streamId,
-                    playerVars: { autoplay: 0, controls: 1, playsinline: 1, rel: 0, modestbranding: 1 },
+                    playerVars: {
+                        autoplay: 0, controls: 1, playsinline: 1, rel: 0, modestbranding: 1
+                    },
                     events: {
                         onReady: function () { ytReady = true; },
                         onError: function () { ytReady = false; ytPlayer = null; }
                     }
                 });
             } catch (e) {
-                ytReady = false; ytPlayer = null;
+                ytReady = false;
+                ytPlayer = null;
             }
         };
 
-        const tag   = document.createElement('script');
-        tag.src     = 'https://www.youtube.com/iframe_api';
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
         tag.onerror = function () { ytReady = false; ytPlayer = null; };
         document.head.appendChild(tag);
     }
 
-    // Toggle — клик по логото
     function manageMusic() {
+        // 1) Ако YouTube е готов — управлява него.
         if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
-            ytPlayer.getPlayerState() === 1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
+            if (ytPlayer.getPlayerState() === 1) { // 1 = playing
+                ytPlayer.pauseVideo();
+            } else {
+                ytPlayer.playVideo();
+            }
             return;
         }
+        // 2) Иначе — локалната mp3.
         const audio = elements.audio.audio();
         if (!audio) { return; }
-        audio.paused ? audio.play() : audio.pause();
+        if (audio.paused) { audio.play(); } else { audio.pause(); }
     }
 
-    // Само спира — при достигане на 00:00
+    // НОВО: само спира музиката (без toggle) — извиква се при 00:00
     function stopMusic() {
         if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
             if (ytPlayer.getPlayerState() === 1) { ytPlayer.pauseVideo(); }
@@ -415,7 +340,7 @@
 
     function getMinutesToSet() {
         const currentMinutes = new Date().getMinutes();
-        const currentHalf    = Number(currentMinutes) >= 30 ? 60 : 30;
+        const currentHalf = Number(currentMinutes) >= 30 ? 60 : 30;
         return (currentHalf - currentMinutes);
     }
 
@@ -430,7 +355,7 @@
         partners.concat(partners).forEach(slider.appendPartner);
     }
 
-    /* ----- bootstrap ----- */
+    /* ----- bootstrap (index.js) ----- */
     function init() {
         setupEvents();
         appendPartnersElements();
