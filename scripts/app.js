@@ -10,12 +10,6 @@
 
     /* ======================================================================
      * МУЗИКА
-     * 1) Опитва да пусне видеото от YouTube (работи сигурно на GitHub Pages;
-     *    локално през file:// понякога не тръгва — браузърнo ограничение).
-     * 2) Ако YouTube не успее, при клик върху логото свири public/melody.mp3.
-     *
-     * Може да сложиш цял линк ИЛИ само ID-то. Празна стойност ('') = само mp3.
-     * Може и през URL, без да пипаш кода: index.html?yt=ВИДЕО_ID
      * ====================================================================== */
     const MUSIC_STREAM_ID = 'https://www.youtube.com/watch?v=36YnV9STBqc';
 
@@ -61,7 +55,7 @@
         { src: "./public/partners/sq_pilates_reformer.svg", name: "SQ Pilates Reformer" },
         { src: "./public/partners/tn_logo.png", name: "TN Pilates" },
         { src: "./public/partners/Margo_no_bg_circle.png", name: "So Personal by Margo" },
-        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }    
+        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }
     ];
 
     /* ----- slider.js ----- */
@@ -115,97 +109,115 @@
     };
 
     /* ======================================================================
-     * WEB WORKER ТАЙМЕР
-     * Върви в background thread — не спира при заключен екран или неактивен таб.
-     * Ако браузърът не поддържа Workers (много рядко), пада на requestAnimationFrame.
+     * ТАЙМЕР — Web Worker (background) + RAF fallback
+     * Worker-ът се създава като Blob, за да работи от file:// и GitHub Pages
+     * без проблеми с пътища.
      * ====================================================================== */
-    let timerWorker = null;
-    let workerSupported = (typeof Worker !== 'undefined');
+    const WORKER_CODE = `
+        'use strict';
+        var intervalId = null;
+        var remaining  = 0;
+        self.onmessage = function(e) {
+            var cmd = e.data.cmd;
+            if (cmd === 'start') {
+                if (intervalId !== null) { clearInterval(intervalId); }
+                remaining = e.data.totalSeconds;
+                intervalId = setInterval(function() {
+                    if (remaining <= 0) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                        self.postMessage({ type: 'done' });
+                        return;
+                    }
+                    remaining--;
+                    self.postMessage({ type: 'tick', totalSeconds: remaining });
+                }, 1000);
+            } else if (cmd === 'stop') {
+                if (intervalId !== null) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
+        };
+    `;
 
-    // requestAnimationFrame fallback (оригиналната логика)
-    let animationId;
+    let timerWorker = null;
+
+    function createWorker() {
+        try {
+            var blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
+            var url  = URL.createObjectURL(blob);
+            var w    = new Worker(url);
+            URL.revokeObjectURL(url);
+            return w;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /* RAF fallback */
+    let animationId    = null;
     let lastTimeCalled = 0;
+    let countdownTime  = 0;
 
     function rafTick(elapsedTime) {
         if ((elapsedTime - lastTimeCalled) >= 1000 || lastTimeCalled === 0) {
             lastTimeCalled = elapsedTime;
-            tickDown();
+
+            var mEl     = elements.time.minutes();
+            var sEl     = elements.time.seconds();
+            var minutes = Number(mEl.textContent);
+            var secs    = Number(sEl.textContent);
+
+            if (secs > 0) {
+                sEl.textContent = formatTimeContent(secs - 1);
+            } else if (minutes > 0) {
+                mEl.textContent = formatTimeContent(minutes - 1);
+                sEl.textContent = '59';
+            } else {
+                onTimerDone();
+                return; // не продължава RAF
+            }
         }
         animationId = requestAnimationFrame(rafTick);
     }
 
-    // Обща функция за едно тактуване надолу — ползва се и от Worker, и от RAF.
-    function tickDown() {
-        const mEl = elements.time.minutes();
-        const sEl = elements.time.seconds();
-        const minutes = Number(mEl.textContent);
-        const seconds = Number(sEl.textContent);
-
-        if (seconds > 0) {
-            sEl.textContent = formatTimeContent(seconds - 1);
-        } else if (minutes > 0) {
-            mEl.textContent = formatTimeContent(minutes - 1);
-            sEl.textContent = '59';
-        } else {
-            // Таймерът е достигнал 00:00
-            onTimerDone();
-            return;
-        }
-
-        // Актуализира worker-а с реалното оставащо време (за синхрон след пауза)
-        // — не е нужно при Worker режим, там worker-ът е водещ.
-    }
-
-    // Извиква се при 00:00 — от Worker или от RAF
     function onTimerDone() {
-        // Спира таймера
-        if (isStarted) {
-            isStarted = false;
-            stopTimer();
-            toggleTimerState(elements.info.timerState(), false);
-        }
-        // Нулира дисплея
+        isStarted = false;
+        stopTimer();
+        toggleTimerState(elements.info.timerState(), false);
         elements.time.minutes().textContent = '00';
         elements.time.seconds().textContent = '00';
-
-        // Спира музиката
         stopMusic();
     }
 
     function startTimer(totalSeconds) {
-        if (workerSupported) {
-            if (!timerWorker) {
-                // Определя пътя до worker файла спрямо app.js
-                const workerUrl = new URL('./timer.worker.js', import.meta.url || (document.currentScript && document.currentScript.src) || location.href).href;
-                try {
-                    timerWorker = new Worker(workerUrl);
-                } catch (e) {
-                    workerSupported = false;
+        var w = createWorker();
+        if (w) {
+            timerWorker = w;
+            timerWorker.onmessage = function (e) {
+                if (e.data.type === 'tick') {
+                    var mins = Math.floor(e.data.totalSeconds / 60);
+                    var secs = e.data.totalSeconds % 60;
+                    elements.time.minutes().textContent = formatTimeContent(mins);
+                    elements.time.seconds().textContent = formatTimeContent(secs);
+                } else if (e.data.type === 'done') {
+                    onTimerDone();
                 }
-            }
-            if (timerWorker) {
-                timerWorker.onmessage = function (e) {
-                    if (e.data.type === 'tick') {
-                        const mins = Math.floor(e.data.totalSeconds / 60);
-                        const secs = e.data.totalSeconds % 60;
-                        elements.time.minutes().textContent = formatTimeContent(mins);
-                        elements.time.seconds().textContent = formatTimeContent(secs);
-                    } else if (e.data.type === 'done') {
-                        onTimerDone();
-                    }
-                };
-                timerWorker.postMessage({ cmd: 'start', totalSeconds });
-                return;
-            }
+            };
+            timerWorker.postMessage({ cmd: 'start', totalSeconds: totalSeconds });
+        } else {
+            // RAF fallback
+            lastTimeCalled = 0;
+            animationId = requestAnimationFrame(rafTick);
         }
-        // RAF fallback
-        lastTimeCalled = 0;
-        animationId = requestAnimationFrame(rafTick);
     }
 
     function stopTimer() {
         if (timerWorker) {
             timerWorker.postMessage({ cmd: 'stop' });
+            timerWorker.terminate();
+            timerWorker = null;
         }
         if (animationId) {
             cancelAnimationFrame(animationId);
@@ -221,14 +233,10 @@
     function controlCenter() {
         isStarted = !isStarted;
         if (isStarted) {
-            const mins = Number(elements.time.minutes().textContent);
-            const secs = Number(elements.time.seconds().textContent);
+            const mins  = Number(elements.time.minutes().textContent);
+            const secs  = Number(elements.time.seconds().textContent);
             const total = mins * 60 + secs;
-            if (total <= 0) {
-                // Няма какво да отброява — не стартира
-                isStarted = false;
-                return;
-            }
+            if (total <= 0) { isStarted = false; return; }
             startTimer(total);
         } else {
             stopTimer();
@@ -261,12 +269,11 @@
         e.preventDefault();
         const [minutesVal, secondsVal] = [...document.querySelectorAll('form input')].map((el) => formatTimeContent(el.value));
         const suggestedPick = e.suggestedPick !== undefined ? e.suggestedPick : false;
-        const timeFromForm = formatTimeContent(minutesVal);
 
         if (suggestedPick !== false) {
-            // 60 → зарежда 59:59; всички останали → MM:00
             const num = Number(suggestedPick);
             if (num >= 60) {
+                // 60 → 59:59 (максимумът на таймера)
                 minutes().textContent = '59';
                 seconds().textContent = '59';
             } else {
@@ -274,7 +281,7 @@
                 seconds().textContent = '00';
             }
         } else {
-            minutes().textContent = timeFromForm;
+            minutes().textContent = formatTimeContent(minutesVal);
             seconds().textContent = formatTimeContent(secondsVal);
         }
 
@@ -291,11 +298,12 @@
     function pickSuggestedTime(e) {
         const { textContent } = e.target;
         const trimmed = textContent.trim();
-        // Приема 2- или 3-символни стойности (напр. "05", "30", "60")
-        if (trimmed.length < 2 || trimmed.length > 3 || isNaN(Number(trimmed))) { return; }
+        // Оригиналната проверка беше length !== 2, но "60" е 2 символа, така че
+        // проверяваме само дали е число
+        if (!trimmed || isNaN(Number(trimmed))) { return; }
         setTheTimer({
             suggestedPick: trimmed,
-            preventDefault: () => { }
+            preventDefault: () => {}
         });
     }
 
@@ -346,10 +354,10 @@
         return Number(value).toString().padStart(2, 0);
     }
 
+    /* ----- music.js ----- */
     let ytPlayer = null;
-    let ytReady = false;
+    let ytReady  = false;
 
-    // Приема цял YouTube линк или само ID и връща чистото 11-символно ID.
     function extractYouTubeId(input) {
         if (!input) { return ''; }
         input = String(input).trim();
@@ -359,56 +367,46 @@
     }
 
     function setupMusic() {
-        const raw = (parseQueryString(location.search)?.yt) || MUSIC_STREAM_ID;
+        const raw      = (parseQueryString(location.search)?.yt) || MUSIC_STREAM_ID;
         const streamId = extractYouTubeId(raw);
-        if (!streamId) { return; } // няма валиден YouTube ID → ползва се само mp3
+        if (!streamId) { return; }
 
         window.onYouTubeIframeAPIReady = function () {
             try {
                 ytPlayer = new YT.Player('yt-player', {
                     videoId: streamId,
-                    playerVars: {
-                        autoplay: 0, controls: 1, playsinline: 1, rel: 0, modestbranding: 1
-                    },
+                    playerVars: { autoplay: 0, controls: 1, playsinline: 1, rel: 0, modestbranding: 1 },
                     events: {
                         onReady: function () { ytReady = true; },
                         onError: function () { ytReady = false; ytPlayer = null; }
                     }
                 });
             } catch (e) {
-                ytReady = false;
-                ytPlayer = null;
+                ytReady = false; ytPlayer = null;
             }
         };
 
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
+        const tag   = document.createElement('script');
+        tag.src     = 'https://www.youtube.com/iframe_api';
         tag.onerror = function () { ytReady = false; ytPlayer = null; };
         document.head.appendChild(tag);
     }
 
+    // Toggle — клик по логото
     function manageMusic() {
-        // 1) Ако YouTube е готов — управлява него.
         if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
-            if (ytPlayer.getPlayerState() === 1) { // 1 = playing
-                ytPlayer.pauseVideo();
-            } else {
-                ytPlayer.playVideo();
-            }
+            ytPlayer.getPlayerState() === 1 ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
             return;
         }
-        // 2) Иначе — локалната mp3.
         const audio = elements.audio.audio();
         if (!audio) { return; }
-        if (audio.paused) { audio.play(); } else { audio.pause(); }
+        audio.paused ? audio.play() : audio.pause();
     }
 
-    // Спира музиката при достигане на 00:00 (без toggle — само пауза)
+    // Само спира — при достигане на 00:00
     function stopMusic() {
         if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
-            if (ytPlayer.getPlayerState() === 1) { // спира само ако свири
-                ytPlayer.pauseVideo();
-            }
+            if (ytPlayer.getPlayerState() === 1) { ytPlayer.pauseVideo(); }
             return;
         }
         const audio = elements.audio.audio();
@@ -417,7 +415,7 @@
 
     function getMinutesToSet() {
         const currentMinutes = new Date().getMinutes();
-        const currentHalf = Number(currentMinutes) >= 30 ? 60 : 30;
+        const currentHalf    = Number(currentMinutes) >= 30 ? 60 : 30;
         return (currentHalf - currentMinutes);
     }
 
@@ -432,7 +430,7 @@
         partners.concat(partners).forEach(slider.appendPartner);
     }
 
-    /* ----- bootstrap (index.js) ----- */
+    /* ----- bootstrap ----- */
     function init() {
         setupEvents();
         appendPartnersElements();
