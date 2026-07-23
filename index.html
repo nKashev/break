@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="bg">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +9,9 @@
     <link rel="stylesheet" href="./styles/modal.css" type=text/css>
     <link rel="stylesheet" href="./styles/carousel.css">
     <link href="./public/blue-favicon.ico" rel="shortcut icon" type="image/x-icon">
+
 </head>
+
 <body>
     <div class="site-wrapper">
         <header>
@@ -29,16 +32,16 @@
                         aria-checked="false" aria-label="Старт / Пауза на таймера">
                         <span class="toggle-text on">ВКЛ</span>
                         <span class="toggle-text off">ИЗКЛ</span>
-                        <span class="toggle-knob"></span>
+                        <span class="toggle-knob" />
                     </button>
                     <p>Секунди</p>
                 </div>
             </div>
             <div class="slider">
-                <div id="partners"></div>
+                <div id="partners" />
             </div>
         </div>
-        <div class="modal-overlay" id="modal-overlay"></div>
+        <div class="modal-overlay" id="modal-overlay" />
         <div class="modal" id="modal">
             <button class="close-button" id="close-button" title="Затвори">x</button>
             <section class="modal-content">
@@ -46,6 +49,7 @@
                     <div>
                         <input min="0" max="59" placeholder="Минути" tabindex="1" type="number" name="minutes">
                         <input min="0" max="59" placeholder="Секунди" tabindex="2" type="number" name="seconds">
+
                     </div>
                     <button tabindex="3" type="submit">Старт</button>
                 </form>
@@ -66,10 +70,12 @@
     <!-- Музика: пробва YouTube; ако не успее (напр. локално), пуска тази mp3. -->
     <audio loop>
         <source src="./public/melody.mp3" type="audio/mp3">
+
     </audio>
     <div id="yt-player-wrap" aria-hidden="true">
-        <div id="yt-player"></div>
+        <div id="yt-player" />
     </div>
-    <script src="./scripts/app.js"></script>
+    <script src="./scripts/app.js" />
 </body>
+
 </html>
