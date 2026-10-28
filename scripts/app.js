@@ -54,6 +54,7 @@
     const partners = [
         { src: "./public/partners/port_pilates_logo.png", name: "Port Pilates" },
         { src: "./public/partners/propilateslogo.png", name: "Pro Pilates" },
+        { src: "./public/partners/private-pilates-logo.jpeg", name: "Private Pilates" },
         { src: "./public/partners/janet_logo.webp", name: "Janet's Reformer Boutique" },
         { src: "./public/partners/panther_logo.png", name: "Panther Pilates Reformers" },
         { src: "./public/partners/gmfit.webp", name: "GM FIT" },
