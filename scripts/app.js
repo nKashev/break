@@ -132,6 +132,8 @@
             if (seconds > 0) {
                 const changedSeconds = seconds - 1;
                 elements.time.seconds().textContent = formatTimeContent(changedSeconds);
+                // Таймерът току-що стигна 00:00 - спира музиката (само веднъж).
+                if (changedSeconds === 0 && Number(minutes) === 0) { stopMusic(); }
             } else if (minutes > 0) {
                 const changedMinutes = minutes - 1;
                 elements.time.minutes().textContent = formatTimeContent(changedMinutes);
@@ -314,6 +316,16 @@
         const audio = elements.audio.audio();
         if (!audio) { return; }
         if (audio.paused) { audio.play(); } else { audio.pause(); }
+    }
+
+    // Само спира музиката (без toggle) - извиква се при 00:00.
+    function stopMusic() {
+        if (ytReady && ytPlayer && typeof ytPlayer.getPlayerState === 'function') {
+            if (ytPlayer.getPlayerState() === 1) { ytPlayer.pauseVideo(); }
+            return;
+        }
+        const audio = elements.audio.audio();
+        if (audio && !audio.paused) { audio.pause(); }
     }
 
     function getMinutesToSet() {

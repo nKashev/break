@@ -132,15 +132,14 @@
             if (seconds > 0) {
                 const changedSeconds = seconds - 1;
                 elements.time.seconds().textContent = formatTimeContent(changedSeconds);
+                // Таймерът току-що стигна 00:00 - спира музиката (само веднъж).
+                if (changedSeconds === 0 && Number(minutes) === 0) { stopMusic(); }
             } else if (minutes > 0) {
                 const changedMinutes = minutes - 1;
                 elements.time.minutes().textContent = formatTimeContent(changedMinutes);
                 elements.time.seconds().textContent = 59;
             } else if (parseQueryString(location.search)?.prep) {
                 elements.time.minutes().textContent = formatTimeContent(getMinutesToSet());
-            } else {
-                // НОВО: таймерът стигна 00:00 — спира музиката
-                stopMusic();
             }
         }
         animationId = requestAnimationFrame(startUpdateSeconds);
