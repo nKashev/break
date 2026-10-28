@@ -45,7 +45,8 @@
         },
         audio: {
             audio: () => document.querySelector('audio'),
-            muteButton: () => document.querySelector('header')
+            muteButton: () => document.querySelector('header'),
+            logo: () => document.querySelector('.header-logo img')
         }
     };
 
@@ -61,7 +62,8 @@
         { src: "./public/partners/sq_pilates_reformer.svg", name: "SQ Pilates Reformer" },
         { src: "./public/partners/tn_logo.png", name: "TN Pilates" },
         { src: "./public/partners/Margo_no_bg_circle.png", name: "So Personal by Margo" },
-        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" }    
+        { src: "./public/partners/sb_logo_no_bg.png", name: "Soul & Body" },
+        { src: "./public/partners/BioRed-Reformer-logo-transparent.svg", name: "BioRed Reformer" }
     ];
 
     /* ----- slider.js ----- */
@@ -297,7 +299,8 @@
                     },
                     events: {
                         onReady: function () { ytReady = true; },
-                        onError: function () { ytReady = false; ytPlayer = null; }
+                        onStateChange: function (e) { setLogoPlaying(e.data === 1); }, // 1 = playing
+                        onError: function () { ytReady = false; ytPlayer = null; setLogoPlaying(false); }
                     }
                 });
             } catch (e) {
@@ -344,6 +347,28 @@
         return (currentHalf - currentMinutes);
     }
 
+    // ЛОГО: златно по подразбиране, синьо докато свири музиката.
+    const LOGO_IDLE = './public/logo-academy-gold.png';
+    const LOGO_PLAYING = './public/logo.svg';
+
+    function setLogoPlaying(isPlaying) {
+        const logo = elements.audio.logo();
+        if (!logo) { return; }
+        const src = isPlaying ? LOGO_PLAYING : LOGO_IDLE;
+        if (logo.getAttribute('src') !== src) { logo.setAttribute('src', src); }
+    }
+
+    function setupLogoSync() {
+        // Предварително зарежда синьото лого, за да няма премигване при смяната.
+        new Image().src = LOGO_PLAYING;
+        const audio = elements.audio.audio();
+        if (audio) {
+            audio.addEventListener('play', () => setLogoPlaying(true));
+            audio.addEventListener('pause', () => setLogoPlaying(false));
+            audio.addEventListener('ended', () => setLogoPlaying(false));
+        }
+    }
+
     function setupEvents() {
         elements.time.minutes().addEventListener('wheel', timeHandlers.minutes);
         elements.time.seconds().addEventListener('wheel', timeHandlers.seconds);
@@ -361,6 +386,7 @@
         appendPartnersElements();
         setupModal();
         setupMusic();
+        setupLogoSync();
         manageQueryString(location.search);
     }
 
